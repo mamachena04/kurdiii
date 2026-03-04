@@ -3,8 +3,8 @@ import google.generativeai as genai
 import re
 import time
 
-# --- ١. ڕێکخستنی ڕووکار (CSS & HTML) ---
-st.set_page_config(page_title="وەرگێڕی ژێرنووسی پڕۆ", layout="centered")
+# --- ١. دیزاینی پڕۆفیشناڵ (HTML & CSS) ---
+st.set_page_config(page_title="وەرگێڕی ژێرنووسی کوردی", layout="centered")
 
 st.markdown("""
     <style>
@@ -16,95 +16,116 @@ st.markdown("""
         text-align: right;
     }
     .stApp {
-        background-color: #f4f7f6;
+        background-color: #f0f2f6;
     }
-    .main-card {
+    .main-container {
         background-color: white;
-        padding: 30px;
-        border-radius: 15px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        padding: 40px;
+        border-radius: 20px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.05);
     }
     .stButton>button {
         width: 100%;
-        border-radius: 8px;
-        background: linear-gradient(45deg, #2193b0, #6dd5ed);
+        border-radius: 12px;
+        background: linear-gradient(90deg, #1e3c72 0%, #2a5298 100%);
         color: white;
+        height: 3.5em;
+        font-size: 18px;
         border: none;
-        height: 3em;
-        font-weight: bold;
+        transition: 0.3s;
     }
-    .progress-text {
-        color: #555;
-        font-size: 0.9em;
+    .stButton>button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2);
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- ٢. لۆجیکی وەرگێڕان (Python) ---
-def translate_block(text, model):
+# --- ٢. لۆجیکی وەرگێڕانی توند (Python) ---
+def translate_text(text, model):
     if not text.strip() or text.isdigit():
         return text
     try:
-        prompt = f"وەک وەرگێڕێکی پیشەگەر، ئەم دەقە بە زمانی کوردییەکی زۆر پاراو و سروشتی سۆرانی بنووسەوە. تەنها وەرگێڕانەکە بنووسە:\n\n{text}"
+        # ڕێنمایی زۆر توند بۆ ئەوەی مۆدێلەکە زمانی تورکی نەهێڵێتەوە
+        prompt = f"""
+        URGENT TASK: Translate the following subtitle text into KURDISH SORANI.
+        
+        STRICT RULES:
+        1. OUTPUT ONLY the Kurdish Sorani translation.
+        2. DELETE all Turkish or original words.
+        3. Use natural, conversational Kurdish (Sorani).
+        4. Do not explain anything, just give the translation.
+
+        TEXT TO TRANSLATE: 
+        {text}
+        
+        KURDISH SORANI:
+        """
         response = model.generate_content(prompt)
-        return response.text.strip() if response.text else text
+        if response and response.text:
+            return response.text.strip()
+        return text
     except Exception:
         return text
 
-# --- ٣. پێکهاتەی وێبسایتەکە ---
-st.markdown("<div class='main-card'>", unsafe_allow_html=True)
+# --- ٣. ڕووکاری بەکارهێنەر ---
+st.markdown("<div class='main-container'>", unsafe_allow_html=True)
 st.title("🎬 وەرگێڕی ژێرنووسی زیرەک")
-st.write("فایلی SRT باربکە و بە مۆدێلی Gemini وەریگێڕە بۆ کوردی.")
+st.write("باشترین مۆدێلی ژیری دەستکرد بەکاردەهێنین بۆ وەرگێڕانی ژێرنووسەکانت بۆ کوردییەکی پاراو.")
 
-# وەرگرتنی کلیل بە شێوەی پاسۆرد بۆ پارێزراوی
-api_key = st.text_input("AIzaSyDwz_P2bHwZGKczqMBmSGd3OnAaccV7erM", type="password", help="ffff")
+# وەرگرتنی کلیل بە پارێزراوی
+api_key = st.text_input("AIzaSyDwz_P2bHwZGKczqMBmSGd3OnAaccV7erM", type="password", help="ff")
 
-uploaded_file = st.file_uploader("هەڵبژاردنی فایلی SRT", type=['srt'])
+uploaded_file = st.file_uploader("فایلی SRT هەڵبژێرە", type=['srt'])
 
 if uploaded_file and api_key:
-    # ڕێکخستنی مۆدێل
     genai.configure(api_key=api_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
     
-    if st.button("🚀 دەستپێکردنی وەرگێڕانی پاراو"):
-        # خوێندنەوەی فایل
+    # بەکارهێنانی مۆدێلی Pro ئەگەر هەبێت بۆ مانای قووڵتر، ئەگەرنا Flash
+    try:
+        model = genai.GenerativeModel('gemini-1.5-pro')
+        # تاقیکردنەوەی مۆدێلەکە
+        model.generate_content("hi")
+    except:
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+    if st.button("🚀 دەستپێکردنی وەرگێڕانی کوردی"):
         raw_content = uploaded_file.getvalue().decode("utf-8")
-        # جیاکردنەوەی بلۆکەکان بەبێ تێکدانی کاتەکان
+        # جیاکردنەوەی بلۆکەکان بۆ ئەوەی کاتەکان تێکنەچن
         blocks = re.split(r'\n\s*\n', raw_content.strip())
         
         translated_srt = []
         progress_bar = st.progress(0)
-        status = st.empty()
+        status_msg = st.empty()
         
         for i, block in enumerate(blocks):
             lines = block.split('\n')
             if len(lines) >= 3:
                 index = lines[0]
                 timestamp = lines[1]
-                text = " ".join(lines[2:])
+                original_text = " ".join(lines[2:])
                 
-                # وەرگێڕانی تەنها دەقەکە
-                kurdish_text = translate_block(text, model)
+                # وەرگێڕان بە پڕۆمپتە نوێیەکە
+                kurdish_text = translate_text(original_text, model)
                 
-                # دروستکردنەوەی بلۆکەکە
+                # دووبارە ڕێکخستنەوەی بلۆکەکە
                 translated_srt.append(f"{index}\n{timestamp}\n{kurdish_text}")
                 
-                # نوێکردنەوەی پێشکەوتن
+                # نیشاندانی پێشکەوتن
                 prog = (i + 1) / len(blocks)
                 progress_bar.progress(prog)
-                status.markdown(f"<p class='progress-text'>خەریکی چارەسەرکردنی دێڕی {i+1} لە {len(blocks)}...</p>", unsafe_allow_html=True)
+                status_msg.text(f"وەرگێڕانی دێڕی {i+1} لە {len(blocks)}...")
                 
-                # پشوو بۆ پاراستنی API
-                time.sleep(0.6)
+                time.sleep(0.5) # پشوو بۆ API
         
-        # یەکخستنەوەی فایلەکە
+        # دروستکردنەوەی ناوەڕۆکی کۆتایی
         final_output = "\n\n".join(translated_srt)
         
         st.success("✅ وەرگێڕان بە سەرکەوتوویی تەواو بوو!")
         st.download_button(
             label="📥 داگرتنی فایلی وەرگێڕدراو",
             data=final_output,
-            file_name="translated_kurdish.srt",
+            file_name="kurdish_subtitle.srt",
             mime="text/plain"
         )
 st.markdown("</div>", unsafe_allow_html=True)
