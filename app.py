@@ -2,67 +2,69 @@ import streamlit as st
 import google.generativeai as genai
 import time
 
-# کلیلەکەت لێرە دابنێ
-genai.configure(api_key="AIzaSyA3xiFw-wAtwINwYQpnEDNV3OOLJrZKnoM")
+# 🔑 کلیلە نوێیەکەت لێرە دابنێ
+API_KEY = "AIzaSyDZTm888ebwmI81HmNkEn4m5TCbzWQhcy0"
+genai.configure(api_key=API_KEY)
 
-st.set_page_config(page_title="وەرگێڕی ژێرنووسی پێشکەوتوو", layout="wide")
-st.title("🎬 وەرگێڕی فایلی SRT (وەشانی جێگیر)")
+# ڕێکخستنی لاپەڕە
+st.set_page_config(page_title="وەرگێڕی ژێرنووسی کوردی", layout="wide", initial_sidebar_state="collapsed")
 
-SYSTEM_PROMPT = "Translate this SRT subtitle part to Kurdish Sorani. Keep timestamps and numbers exactly the same. Translate for meaning and natural flow. Output only SRT."
+# ستایلی RTL بۆ زمانی کوردی
+st.markdown("""
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap');
+    html, body, [class*="css"] { font-family: 'Vazirmatn', sans-serif; direction: rtl; text-align: right; }
+    .stButton>button { width: 100%; border-radius: 20px; background-color: #ff4b4b; color: white; }
+    .stProgress > div > div > div > div { background-color: #ff4b4b; }
+    </style>
+    """, unsafe_allow_html=True)
 
-def split_srt(text, chunk_size=40): # قەبارەی پارچەکانمان بچووکتر کردەوە بۆ دڵنیایی زیاتر
-    lines = text.split('\n')
-    chunks = []
-    current_chunk = []
-    for line in lines:
-        current_chunk.append(line)
-        if len(current_chunk) > chunk_size and line.strip() == "":
-            chunks.append("\n".join(current_chunk))
-            current_chunk = []
-    if current_chunk:
-        chunks.append("\n".join(current_chunk))
-    return chunks
+st.title("🎬 وەرگێڕی ژێرنووسی SRT بۆ کوردی")
+st.info("ئەم وێبسایتە مۆدێلی Gemini بەکاردەهێنێت بۆ وەرگێڕانی فایلی SRT بە شێوەیەکی زیرەک.")
 
+# سیستەمی وەرگێڕان
+def translate_chunk(text, model_name="gemini-1.5-flash"):
+    system_prompt = "You are a professional subtitle translator. Translate this SRT content to Kurdish Sorani. Keep timestamps exactly same. Output ONLY the translated SRT."
+    try:
+        model = genai.GenerativeModel(model_name)
+        response = model.generate_content(f"{system_prompt}\n\n{text}")
+        return response.text
+    except Exception as e:
+        return f"Error: {str(e)}"
+
+# بەشی بارکردنی فایل
 uploaded_file = st.file_uploader("فایلی SRT لێرە دابنێ", type=['srt'])
 
 if uploaded_file:
-    srt_content = uploaded_file.getvalue().decode("utf-8")
+    content = uploaded_file.getvalue().decode("utf-8")
+    lines = content.split('\n')
     
-    if st.button("دەستپێکردنی وەرگێڕان"):
-        chunks = split_srt(srt_content)
-        st.info(f"فایلەکە بە سەرکەوتوویی کرا بە {len(chunks)} پارچە.")
-        
-        full_translation = ""
+    # دابەشکردنی فایلەکە بۆ پارچەی بچووک (بۆ ئەوەی Free API نەوەستێت)
+    chunk_size = 40 
+    chunks = ["\n".join(lines[i:i + chunk_size]) for i in range(0, len(lines), chunk_size)]
+    
+    if st.button("🚀 دەستپێکردنی وەرگێڕانی فایلەکە"):
+        full_text = ""
         progress_bar = st.progress(0)
-        
-        # لێرە ناوی مۆدێلە جیاوازەکان تاقی دەکەینەوە
-        model_names = ['gemini-1.5-flash', 'gemini-pro', 'models/gemini-1.5-flash']
-        
-        success_model = None
+        status_text = st.empty()
         
         for i, chunk in enumerate(chunks):
-            translated_chunk = None
+            status_text.text(f"خەریکی وەرگێڕانی پارچەی {i+1} لە {len(chunks)}...")
+            translated = translate_chunk(chunk)
             
-            # هەوڵدان بۆ بەکارهێنانی مۆدێلەکان یەک لە دوای یەک تا دانەیەکیان کار دەکات
-            for m_name in model_names:
-                try:
-                    model = genai.GenerativeModel(m_name)
-                    response = model.generate_content(f"{SYSTEM_PROMPT}\n\n{chunk}")
-                    translated_chunk = response.text
-                    success_model = m_name # ئەگەر یەکێکیان کاری کرد، دەیکەینە مۆدێلی سەرەکی
-                    break
-                except:
-                    continue
-            
-            if translated_chunk:
-                full_translation += translated_chunk + "\n"
-                progress = (i + 1) / len(chunks)
-                progress_bar.progress(progress)
-                time.sleep(2) # کاتی چاوەڕێمان زیاد کرد بۆ ئەوەی API بلۆکمان نەکات
-            else:
-                st.error(f"هەڵە لە پارچەی {i+1}: ناتوانرێت پەیوەندی بە Gemini بکرێت. تکایە دڵنیابەرەوە لە ئینتەرنێتەکەت یان کلیلەکەت.")
+            if "Error" in translated:
+                st.error(f"هەڵەیەک ڕوویدا لە پارچەی {i+1}. تکایە دڵنیابەرەوە لە کلیلەکەت.")
                 break
-        
-        if full_translation:
-            st.success("هەموو فایلەکە بە سەرکەوتوویی وەرگێڕدرا!")
-            st.download_button("📥 داگرتنی فایلی وەرگێڕدراو", full_translation, file_name="kurdish_subtitle.srt")
+            
+            full_text += translated + "\n"
+            progress_bar.progress((i + 1) / len(chunks))
+            time.sleep(1.5) # چاوەڕوانی بۆ ڕێگری لە بلۆککردنی API
+            
+        if full_text:
+            st.success("✅ وەرگێڕان بە سەرکەوتوویی کۆتایی هات!")
+            st.download_button(
+                label="📥 داگرتنی فایلی وەرگێڕدراو",
+                data=full_text,
+                file_name="translated_kurdish.srt",
+                mime="text/plain"
+            )
